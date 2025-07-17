@@ -1,0 +1,30 @@
+import express from "express";
+import puppeteer from "puppeteer";
+
+const app = express();
+app.use(express.json());
+
+app.post("/scrape", async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: "Missing URL" });
+
+  const browser = await puppeteer.launch({ headless: true });
+  const page = await browser.newPage();
+  await page.goto(url, { waitUntil: "networkidle2", timeout: 0 });
+
+  const data = await page.evaluate(() => {
+    const carName = document.querySelector("h1")?.innerText.trim() || "";
+    const brand = document.querySelector('[itemprop="brand"]')?.innerText.trim() || "";
+    const description = document.querySelector("meta[name='description']")?.content || "";
+    const images = Array.from(document.querySelectorAll("img"))
+      .map((img) => img.src)
+      .filter((src) => src.startsWith("https") && src.includes("car"));
+    const pageText = document.body.innerText.slice(0, 15000);
+    return { carName, brand, description, images, pageText };
+  });
+
+  await browser.close();
+  return res.json(data);
+});
+
+app.listen(3000, () => console.log("🚀 Scraper microservice running on port 3000"));
